@@ -16,7 +16,25 @@ const directionKeys: Record<string, Direction> = {
   ArrowRight: 'right',
 }
 
-/** Moves focus to the nearest launcher in the requested direction. */
+interface LayoutItem {
+  element: HTMLElement
+  index: number
+  rect: DOMRect
+}
+
+interface LayoutRow {
+  top: number
+  items: LayoutItem[]
+}
+
+/**
+ * Moves focus one logical step at a time through the rendered rows.
+ *
+ * The DOM order is stable, while the number of columns in collection grids
+ * changes with the viewport. Grouping by the actual rendered top/left
+ * positions keeps navigation aligned with both the Home layout and the
+ * responsive collection CSS without using Euclidean nearest-neighbor jumps.
+ */
 export function useSpatialNavigation({
   itemRefs,
   initialIndex = 0,
@@ -36,9 +54,26 @@ export function useSpatialNavigation({
     })
   }
 
-  const getCenter = (element: HTMLElement) => {
-    const rect = element.getBoundingClientRect()
-    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  const getLayoutRows = () => {
+    const layoutItems: LayoutItem[] = itemRefs.value
+      .map((element, index) => ({ element, index, rect: element.getBoundingClientRect() }))
+      .filter(({ rect }) => rect.width > 0 && rect.height > 0)
+      .sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left)
+
+    const rows: LayoutRow[] = []
+    for (const item of layoutItems) {
+      const row = rows.find((candidate) => Math.abs(candidate.top - item.rect.top) <= 4)
+      if (row) {
+        row.items.push(item)
+      } else {
+        rows.push({ top: item.rect.top, items: [item] })
+      }
+    }
+
+    return rows.map((row) => ({
+      ...row,
+      items: row.items.sort((a, b) => a.rect.left - b.rect.left),
+    }))
   }
 
   const findNextIndex = (direction: Direction) => {
@@ -46,30 +81,26 @@ export function useSpatialNavigation({
     const currentIndex = itemRefs.value.findIndex((item) => item === activeElement)
     if (currentIndex < 0) return initialIndex
 
-    const currentCenter = getCenter(itemRefs.value[currentIndex])
-    const candidates = itemRefs.value
-      .map((element, index) => ({ element, index, center: getCenter(element) }))
-      .filter(({ index, center }) => {
-        if (index === currentIndex) return false
-        if (direction === 'up') return center.y < currentCenter.y - 1
-        if (direction === 'down') return center.y > currentCenter.y + 1
-        if (direction === 'left') return center.x < currentCenter.x - 1
-        return center.x > currentCenter.x + 1
-      })
+    const rows = getLayoutRows()
+    const currentRowIndex = rows.findIndex((row) => row.items.some((item) => item.index === currentIndex))
+    if (currentRowIndex < 0) return currentIndex
 
-    if (!candidates.length) return currentIndex
+    const currentRow = rows[currentRowIndex]
+    const currentColumn = currentRow.items.findIndex((item) => item.index === currentIndex)
+    if (currentColumn < 0) return currentIndex
 
-    return candidates.reduce((best, candidate) => {
-      const bestDistance = Math.hypot(
-        best.center.x - currentCenter.x,
-        best.center.y - currentCenter.y,
-      )
-      const candidateDistance = Math.hypot(
-        candidate.center.x - currentCenter.x,
-        candidate.center.y - currentCenter.y,
-      )
-      return candidateDistance < bestDistance ? candidate : best
-    }).index
+    if (direction === 'left' || direction === 'right') {
+      const nextColumn = currentColumn + (direction === 'left' ? -1 : 1)
+      return currentRow.items[nextColumn]?.index ?? currentIndex
+    }
+
+    const nextRowIndex = currentRowIndex + (direction === 'up' ? -1 : 1)
+    const nextRow = rows[nextRowIndex]
+    if (!nextRow) return currentIndex
+
+    // Preserve the column when possible; on a shorter row use its nearest edge.
+    const nextColumn = Math.min(currentColumn, nextRow.items.length - 1)
+    return nextRow.items[nextColumn]?.index ?? currentIndex
   }
 
   const handleKeydown = (event: KeyboardEvent) => {
