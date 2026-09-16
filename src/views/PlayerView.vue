@@ -3,17 +3,29 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import TvPlayer from '../components/TvPlayer.vue'
+import { allowActivation } from '../composables/useActivationGuard'
+import { usePressFeedback } from '../composables/usePressFeedback'
 import { findChannel } from '../data/channels'
 
 const route = useRoute()
 const router = useRouter()
 const backButtonRef = ref<HTMLButtonElement | null>(null)
 const playerRef = ref<InstanceType<typeof TvPlayer> | null>(null)
+const { isPressed, press } = usePressFeedback()
 
 const channel = computed(() => findChannel(String(route.params.channelId)))
 
 const goHome = () => {
   void router.replace({ name: 'home' })
+}
+
+const handleBackClick = (event: MouseEvent) => {
+  if (!allowActivation()) {
+    event.preventDefault()
+    return
+  }
+  press()
+  goHome()
 }
 
 const handlePageKeydown = (event: KeyboardEvent) => {
@@ -24,6 +36,7 @@ const handlePageKeydown = (event: KeyboardEvent) => {
 }
 
 const handleBackKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Enter' || event.key === ' ' || event.code === 'Space') press()
   if (event.key === 'ArrowDown' && channel.value?.playerType === 'hls') {
     event.preventDefault()
     playerRef.value?.focusPlayControl()
@@ -43,8 +56,9 @@ onMounted(focusBackButton)
       ref="backButtonRef"
       type="button"
       class="back-control"
+      :class="{ 'back-control--pressed': isPressed }"
       aria-label="Back to TV Hub"
-      @click="goHome"
+      @click="handleBackClick"
       @keydown="handleBackKeydown"
     >
       <AppIcon name="back" :size="28" />

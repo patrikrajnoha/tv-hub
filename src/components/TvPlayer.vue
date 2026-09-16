@@ -29,23 +29,23 @@ const embedAllow = computed(() =>
 
 const videoRef = ref<HTMLVideoElement | null>(null)
 const playButtonRef = ref<HTMLButtonElement | null>(null)
-const controlRefs = ref<HTMLButtonElement[]>([])
+const controlRefs = ref<(HTMLButtonElement | null)[]>([])
 const isPlaying = ref(false)
+const isLoading = ref(false)
 const hasError = ref(false)
 const embedFailed = ref(false)
 const embedLoaded = ref(false)
 let hls: Hls | null = null
 let embedLoadTimeout: number | undefined
+let nativeManifestLogged = false
 
 const setControlRef = (element: Element | null, index: number) => {
-  if (element instanceof HTMLButtonElement) controlRefs.value[index] = element
+  controlRefs.value[index] = element instanceof HTMLButtonElement ? element : null
 }
 
 const setPlayButtonRef = (element: Element | null) => {
-  if (element instanceof HTMLButtonElement) {
-    playButtonRef.value = element
-    setControlRef(element, 0)
-  }
+  playButtonRef.value = element instanceof HTMLButtonElement ? element : null
+  setControlRef(element, 0)
 }
 
 const seek = (seconds: number) => {
@@ -71,11 +71,16 @@ const moveControl = (offset: number) => {
   const currentIndex = controlRefs.value.findIndex((control) => control === document.activeElement)
   if (currentIndex < 0) return
 
-  const nextIndex = currentIndex + offset
-  if (nextIndex < 0) {
+  const availableIndexes = controlRefs.value
+    .map((control, index) => (control ? index : -1))
+    .filter((index) => index >= 0)
+  const currentPosition = availableIndexes.indexOf(currentIndex)
+  const nextPosition = currentPosition + offset
+
+  if (nextPosition < 0) {
     emit('navigate-back')
-  } else if (nextIndex < controlRefs.value.length) {
-    controlRefs.value[nextIndex]?.focus({ preventScroll: true })
+  } else if (nextPosition < availableIndexes.length) {
+    controlRefs.value[availableIndexes[nextPosition]]?.focus({ preventScroll: true })
   }
 }
 
@@ -101,6 +106,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 const handleEmbedLoad = () => {
   embedLoaded.value = true
   embedFailed.value = false
+  isLoading.value = false
   if (embedLoadTimeout !== undefined) window.clearTimeout(embedLoadTimeout)
 }
 
@@ -111,6 +117,21 @@ const logPlaybackError = () => {
     message: mediaError?.message,
   })
   hasError.value = true
+  isLoading.value = false
+}
+
+const handleVideoPlay = () => (isPlaying.value = true)
+const handleVideoPause = () => (isPlaying.value = false)
+const handleVideoReady = () => {
+  isLoading.value = false
+  if (videoRef.value?.canPlayType('application/vnd.apple.mpegurl') && !nativeManifestLogged) {
+    nativeManifestLogged = true
+    console.info('[TvPlayer] Manifest loaded (native HLS)')
+  }
+}
+
+const handleVideoCanPlay = () => {
+  isLoading.value = false
 }
 
 const setupStream = async () => {
@@ -119,9 +140,12 @@ const setupStream = async () => {
   if (!video || !props.streamUrl) return
 
   hasError.value = false
+  isLoading.value = true
+  nativeManifestLogged = false
   if (video.canPlayType('application/vnd.apple.mpegurl')) {
     console.info('[TvPlayer] Using native HLS')
     video.src = props.streamUrl
+    video.load()
     return
   }
 
@@ -130,6 +154,7 @@ const setupStream = async () => {
     if (!HlsConstructor.isSupported()) {
       console.error('[TvPlayer] HLS is not supported by this browser')
       hasError.value = true
+      isLoading.value = false
       return
     }
 
@@ -139,6 +164,7 @@ const setupStream = async () => {
     hls.attachMedia(video)
     hls.on(HlsConstructor.Events.MANIFEST_PARSED, () => {
       console.info('[TvPlayer] Manifest loaded (hls.js)')
+      isLoading.value = false
     })
     hls.on(HlsConstructor.Events.ERROR, (_event, data) => {
       if (data.fatal) {
@@ -147,35 +173,57 @@ const setupStream = async () => {
           details: data.details,
         })
         hasError.value = true
+        isLoading.value = false
       }
     })
   } catch (error) {
     console.error('[TvPlayer] hls.js setup error', error)
     hasError.value = true
+    isLoading.value = false
   }
+}
+
+const retryPlayback = () => {
+  if (props.playerType !== 'hls' || !props.streamUrl) return
+
+  hls?.destroy()
+  hls = null
+  if (videoRef.value) {
+    videoRef.value.pause()
+    videoRef.value.removeAttribute('src')
+    videoRef.value.load()
+  }
+  void setupStream()
 }
 
 onMounted(() => {
   if (isEmbed.value) {
+    isLoading.value = true
     embedLoadTimeout = window.setTimeout(() => {
-      if (!embedLoaded.value) embedFailed.value = true
+      if (!embedLoaded.value) {
+        embedFailed.value = true
+        isLoading.value = false
+      }
     }, 15000)
     return
   }
 
   const video = videoRef.value
-  video?.addEventListener('play', () => (isPlaying.value = true))
-  video?.addEventListener('pause', () => (isPlaying.value = false))
-  video?.addEventListener('loadedmetadata', () => {
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      console.info('[TvPlayer] Manifest loaded (native HLS)')
-    }
-  })
+  video?.addEventListener('play', handleVideoPlay)
+  video?.addEventListener('pause', handleVideoPause)
+  video?.addEventListener('loadedmetadata', handleVideoReady)
+  video?.addEventListener('canplay', handleVideoCanPlay)
   video?.addEventListener('error', logPlaybackError)
   void setupStream()
 })
 
 onBeforeUnmount(() => {
+  const video = videoRef.value
+  video?.removeEventListener('play', handleVideoPlay)
+  video?.removeEventListener('pause', handleVideoPause)
+  video?.removeEventListener('loadedmetadata', handleVideoReady)
+  video?.removeEventListener('canplay', handleVideoCanPlay)
+  video?.removeEventListener('error', logPlaybackError)
   hls?.destroy()
   hls = null
   if (embedLoadTimeout !== undefined) window.clearTimeout(embedLoadTimeout)
@@ -217,12 +265,18 @@ defineExpose({ focusPlayControl })
       </div>
       <div v-else-if="!isEmbed && hasError" class="player-message">
         <span class="player-message-icon" aria-hidden="true">!</span>
-        <p>Stream sa nepodarilo načítať.</p>
+        <p>Prehrávanie sa nepodarilo načítať.</p>
+      </div>
+      <div v-else-if="!isEmbed && isLoading" class="player-message player-message--loading">
+        <p>Načítavam…</p>
       </div>
       <div v-else-if="isEmbed && embedFailed" class="player-message">
         <span class="player-message-icon" aria-hidden="true">!</span>
         <p>Oficiálny player sa nepodarilo načítať.</p>
         <small>Skontrolujte dostupnosť Markíza playera a skúste to znova.</small>
+      </div>
+      <div v-else-if="isEmbed && isLoading" class="player-message player-message--loading">
+        <p>Načítavam…</p>
       </div>
     </div>
 
@@ -250,6 +304,15 @@ defineExpose({ focusPlayControl })
         @click="seek(10)"
       >
         +10 sec
+      </button>
+      <button
+        v-if="hasError"
+        :ref="(element) => setControlRef(element, 3)"
+        type="button"
+        class="player-control"
+        @click="retryPlayback"
+      >
+        Skúsiť znova
       </button>
     </div>
   </section>

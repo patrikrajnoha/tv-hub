@@ -158,6 +158,12 @@ button {
   transform: scale(1.02);
 }
 
+.launcher-item--pressed,
+.launcher-item:focus-visible.launcher-item--pressed {
+  transform: scale(1.015);
+  transition-duration: var(--motion-fast);
+}
+
 .launcher-item--secondary {
   width: clamp(6.25rem, 7.5vw, 9rem);
   border-color: #39434f;
@@ -262,6 +268,11 @@ button {
   transform: scale(1.03);
 }
 
+.collection-item--pressed {
+  transform: scale(1.01);
+  transition-duration: var(--motion-fast);
+}
+
 .collection-item--browse {
   border-color: #587181;
   color: #dff7ff;
@@ -322,6 +333,11 @@ button {
 .back-control:active,
 .player-control:active {
   transform: scale(0.985);
+  transition-duration: var(--motion-fast);
+}
+
+.back-control--pressed {
+  transform: scale(1.01);
   transition-duration: var(--motion-fast);
 }
 
@@ -419,9 +435,14 @@ button {
   font-size: clamp(0.75rem, 1vw, 1rem);
 }
 
+.player-message--loading p {
+  color: var(--color-focus);
+}
+
 .player-controls {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 0.75rem;
   padding-top: clamp(0.8rem, 1.5vh, 1.25rem);
 }

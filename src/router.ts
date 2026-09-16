@@ -5,6 +5,7 @@ import CollectionView from './views/CollectionView.vue'
 import { series } from './data/series'
 import { shows } from './data/shows'
 import { watchlist } from './data/watchlist'
+import { rememberActiveRoute } from './composables/useFocusMemory'
 
 export const router = createRouter({
   // GitHub Pages does not provide SPA rewrites for arbitrary paths.
@@ -31,4 +32,8 @@ export const router = createRouter({
     },
     { path: '/:pathMatch(.*)*', redirect: { name: 'home' } },
   ],
+})
+
+router.afterEach((to) => {
+  rememberActiveRoute(to.fullPath)
 })

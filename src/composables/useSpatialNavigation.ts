@@ -46,6 +46,11 @@ export function useSpatialNavigation({
     if (!item) return
 
     item.focus({ preventScroll: true })
+    const rect = item.getBoundingClientRect()
+    const isOutsideViewport =
+      rect.top < 0 || rect.left < 0 || rect.bottom > window.innerHeight || rect.right > window.innerWidth
+    if (!isOutsideViewport) return
+
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
     item.scrollIntoView({
       behavior: reducedMotion ? 'auto' : scrollBehavior,

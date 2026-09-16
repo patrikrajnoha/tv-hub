@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import LauncherItem from './LauncherItem.vue'
 import { useSpatialNavigation } from '../composables/useSpatialNavigation'
 import { getHomeFocusIndex, rememberHomeLauncher } from '../composables/useFocusMemory'
@@ -35,8 +35,17 @@ const focusLauncher = (index: number) => {
   void nextTick(() => focusItem(index))
 }
 
-onMounted(() => {
+const restoreHomeFocus = () => {
   requestAnimationFrame(() => focusItem(initialFocusIndex.value))
+}
+
+onMounted(() => {
+  restoreHomeFocus()
+  window.addEventListener('pageshow', restoreHomeFocus)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pageshow', restoreHomeFocus)
 })
 </script>
 

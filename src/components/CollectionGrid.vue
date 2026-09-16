@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import CollectionItem from './CollectionItem.vue'
 import { useSpatialNavigation } from '../composables/useSpatialNavigation'
 import { getCollectionFocusIndex, rememberCollectionItem } from '../composables/useFocusMemory'
@@ -34,8 +34,17 @@ const focusEntry = (index: number) => {
   void nextTick(() => focusItem(index + 1))
 }
 
-onMounted(() => {
+const restoreCollectionFocus = () => {
   requestAnimationFrame(() => focusItem(initialFocusIndex.value))
+}
+
+onMounted(() => {
+  restoreCollectionFocus()
+  window.addEventListener('pageshow', restoreCollectionFocus)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pageshow', restoreCollectionFocus)
 })
 </script>
 
