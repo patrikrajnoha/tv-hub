@@ -3,11 +3,14 @@ import { useRoute } from 'vue-router'
 import { allowActivation } from '../composables/useActivationGuard'
 import { rememberActiveRoute } from '../composables/useFocusMemory'
 import { usePressFeedback } from '../composables/usePressFeedback'
-import type { CollectionItem as CollectionEntry } from '../types'
+import AppIcon from './AppIcon.vue'
+import type { CollectionItem as CollectionEntry, IconName } from '../types'
 
 const props = defineProps<{
   item: CollectionEntry
   browse?: boolean
+  accent?: string
+  icon?: IconName
 }>()
 
 const route = useRoute()
@@ -37,6 +40,10 @@ const handleClick = (event: MouseEvent) => {
     @keydown="handlePressKeydown"
     @click="handleClick"
   >
+    <span class="collection-art" :class="{ 'collection-art--browse': browse }" aria-hidden="true">
+      <AppIcon :name="props.icon ?? (browse ? 'search' : 'film')" :size="48" />
+      <span class="collection-art-sheen"></span>
+    </span>
     <span class="collection-item-name">{{ item.name }}</span>
   </a>
 </template>

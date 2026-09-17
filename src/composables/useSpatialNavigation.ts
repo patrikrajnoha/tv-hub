@@ -1,12 +1,15 @@
 import { onBeforeUnmount, onMounted, type Ref } from 'vue'
 
-type Direction = 'up' | 'down' | 'left' | 'right'
+export type SpatialDirection = 'up' | 'down' | 'left' | 'right'
+
+type Direction = SpatialDirection
 
 interface SpatialNavigationOptions {
   itemRefs: Ref<HTMLElement[]>
   initialIndex?: number
   autoFocus?: boolean
   scrollBehavior?: ScrollBehavior
+  getNextIndex?: (currentIndex: number, direction: Direction) => number
 }
 
 const directionKeys: Record<string, Direction> = {
@@ -14,6 +17,18 @@ const directionKeys: Record<string, Direction> = {
   ArrowDown: 'down',
   ArrowLeft: 'left',
   ArrowRight: 'right',
+  // Some TV WebViews expose the Android key names instead of Arrow*.
+  DPAD_UP: 'up',
+  DPAD_DOWN: 'down',
+  DPAD_LEFT: 'left',
+  DPAD_RIGHT: 'right',
+}
+
+const legacyDirectionKeyCodes: Record<number, Direction> = {
+  37: 'left',
+  38: 'up',
+  39: 'right',
+  40: 'down',
 }
 
 interface LayoutItem {
@@ -28,18 +43,20 @@ interface LayoutRow {
 }
 
 /**
- * Moves focus one logical step at a time through the rendered rows.
+ * Moves focus one logical step at a time through either a caller-provided
+ * navigation graph or the rendered rows.
  *
  * The DOM order is stable, while the number of columns in collection grids
  * changes with the viewport. Grouping by the actual rendered top/left
- * positions keeps navigation aligned with both the Home layout and the
- * responsive collection CSS without using Euclidean nearest-neighbor jumps.
+ * positions keeps collection navigation aligned with responsive CSS without
+ * using Euclidean nearest-neighbor jumps. Home supplies an explicit graph.
  */
 export function useSpatialNavigation({
   itemRefs,
   initialIndex = 0,
   autoFocus = true,
   scrollBehavior = 'auto',
+  getNextIndex,
 }: SpatialNavigationOptions) {
   const focusItem = (index: number) => {
     const item = itemRefs.value[index]
@@ -86,6 +103,8 @@ export function useSpatialNavigation({
     const currentIndex = itemRefs.value.findIndex((item) => item === activeElement)
     if (currentIndex < 0) return initialIndex
 
+    if (getNextIndex) return getNextIndex(currentIndex, direction)
+
     const rows = getLayoutRows()
     const currentRowIndex = rows.findIndex((row) => row.items.some((item) => item.index === currentIndex))
     if (currentRowIndex < 0) return currentIndex
@@ -109,18 +128,25 @@ export function useSpatialNavigation({
   }
 
   const handleKeydown = (event: KeyboardEvent) => {
-    const direction = directionKeys[event.key]
+    const direction = directionKeys[event.key] ?? directionKeys[event.code] ?? legacyDirectionKeyCodes[event.keyCode]
     if (direction) {
+      // Only claim directional input while this navigation surface owns focus.
+      // This keeps inputs and cross-origin players/browser UI untouched.
+      const activeElement = document.activeElement as HTMLElement | null
+      if (!activeElement || !itemRefs.value.includes(activeElement)) return
+
       event.preventDefault()
+      event.stopPropagation()
       focusItem(findNextIndex(direction))
       return
     }
 
     // Space is an optional Enter equivalent for remotes and keyboards.
-    if (event.key === ' ' || event.code === 'Space') {
+    if (event.key === ' ' || event.code === 'Space' || event.key === 'Enter' || event.key === 'NumpadEnter') {
       const activeElement = document.activeElement as HTMLElement | null
       if (activeElement && itemRefs.value.includes(activeElement)) {
         event.preventDefault()
+        event.stopPropagation()
         activeElement.click()
       }
       return
@@ -131,12 +157,14 @@ export function useSpatialNavigation({
   }
 
   onMounted(() => {
-    window.addEventListener('keydown', handleKeydown)
+    // Capture makes the shell's D-pad decision before browser scrolling,
+    // while the active-element guard prevents global key hijacking.
+    window.addEventListener('keydown', handleKeydown, true)
     if (autoFocus) requestAnimationFrame(() => focusItem(initialIndex))
   })
 
   onBeforeUnmount(() => {
-    window.removeEventListener('keydown', handleKeydown)
+    window.removeEventListener('keydown', handleKeydown, true)
   })
 
   return { focusItem }

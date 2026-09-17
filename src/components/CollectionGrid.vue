@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import CollectionItem from './CollectionItem.vue'
 import { useSpatialNavigation } from '../composables/useSpatialNavigation'
 import { getCollectionFocusIndex, rememberCollectionItem } from '../composables/useFocusMemory'
-import type { CollectionItem as CollectionEntry } from '../types'
+import type { CollectionItem as CollectionEntry, IconName } from '../types'
 
 const props = defineProps<{
   items: CollectionEntry[]
@@ -11,6 +11,8 @@ const props = defineProps<{
   ariaLabel: string
   memoryKey: string
   navigationRefs: HTMLElement[]
+  accent?: string
+  icon?: IconName
 }>()
 
 const itemRefs = ref(props.navigationRefs)
@@ -56,6 +58,8 @@ onBeforeUnmount(() => {
       :ref="(element) => setItemRef(element?.$el ?? element, index)"
       :item="item"
       :browse="props.browseItem?.id === item.id"
+      :accent="props.accent"
+      :icon="props.icon"
       @focus="focusEntry(index)"
     />
   </nav>

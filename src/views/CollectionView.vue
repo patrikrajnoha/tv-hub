@@ -6,12 +6,14 @@ import CollectionGrid from '../components/CollectionGrid.vue'
 import { allowActivation } from '../composables/useActivationGuard'
 import { getCollectionScroll, rememberCollectionScroll } from '../composables/useFocusMemory'
 import { usePressFeedback } from '../composables/usePressFeedback'
-import type { CollectionItem } from '../types'
+import type { CollectionItem, IconName } from '../types'
 
 const props = defineProps<{
   title: string
   items: CollectionItem[]
   browseItem?: CollectionItem
+  accent?: string
+  icon?: IconName
 }>()
 
 const router = useRouter()
@@ -67,7 +69,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main ref="collectionPage" class="collection-page">
+  <main
+    ref="collectionPage"
+    class="collection-page"
+    :style="{ '--collection-accent': props.accent ?? 'var(--color-focus)' }"
+  >
     <button
       :ref="setBackButtonRef"
       class="back-control collection-back"
@@ -82,13 +88,18 @@ onBeforeUnmount(() => {
     </button>
 
     <div class="collection-content">
-      <h1 class="collection-title">{{ props.title }}</h1>
+      <header class="collection-heading">
+        <p class="collection-kicker">TV HUB / KNIŽNICA</p>
+        <h1 class="collection-title">{{ props.title }}</h1>
+      </header>
       <CollectionGrid
         :items="props.items"
         :browse-item="props.browseItem"
         :aria-label="`${props.title} collection`"
         :memory-key="props.title"
         :navigation-refs="navigationRefs"
+        :accent="props.accent"
+        :icon="props.icon"
       />
     </div>
   </main>

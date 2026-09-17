@@ -8,6 +8,8 @@ import type { Launcher } from '../types'
 
 const props = defineProps<{
   launcher: Launcher
+  visualVariant?: 'channels' | 'categories' | 'utilities'
+  selected?: boolean
 }>()
 
 const route = useRoute()
@@ -35,11 +37,13 @@ const handleClick = (event: MouseEvent) => {
     :class="[
       { 'launcher-item--secondary': launcher.variant === 'secondary' },
       { 'launcher-item--pressed': isPressed },
-      `launcher-item--${launcher.id}`,
+      { 'launcher-item--selected': selected },
+      `launcher-item--${visualVariant ?? 'default'}`,
     ]"
+    :style="{ '--accent': launcher.accent }"
     :to="launcher.route"
     :aria-label="`Open ${launcher.label}`"
-    :style="{ '--accent': launcher.accent }"
+    :aria-current="selected ? 'true' : undefined"
     @focus="rememberFocus"
     @keydown="handlePressKeydown"
     @click="handleClick"
@@ -53,11 +57,13 @@ const handleClick = (event: MouseEvent) => {
     :class="[
       { 'launcher-item--secondary': launcher.variant === 'secondary' },
       { 'launcher-item--pressed': isPressed },
-      `launcher-item--${launcher.id}`,
+      { 'launcher-item--selected': selected },
+      `launcher-item--${visualVariant ?? 'default'}`,
     ]"
+    :style="{ '--accent': launcher.accent }"
     :href="launcher.url"
     :aria-label="`Open ${launcher.label}`"
-    :style="{ '--accent': launcher.accent }"
+    :aria-current="selected ? 'true' : undefined"
     @focus="rememberFocus"
     @keydown="handlePressKeydown"
     @click="handleClick"

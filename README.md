@@ -27,3 +27,7 @@ Push the project to a GitHub repository named `tv-hub` on the `main` branch. The
 Edit [`src/data/launchers.ts`](src/data/launchers.ts). External entries use `type: 'external'` and a `url`; channel entries use `type: 'channel'`, a `channelId`, and an internal `route`.
 
 Edit [`src/data/channels.ts`](src/data/channels.ts) to add channel metadata. An authorized HLS URL should later be assigned to its `streamUrl`; keep credentials, tokens, cookies, and private stream details out of the repository.
+
+## Input diagnostics
+
+During local development, append `?debugInput=1` to the dev URL to enable a small overlay and concise console logs for keyboard, focus, and pointer events. This mode is disabled in production. The Home screen's explicit constellation positions and D-pad neighbor graph are maintained in [`src/data/homeLayout.ts`](src/data/homeLayout.ts).
